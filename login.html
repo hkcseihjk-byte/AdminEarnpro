@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>EarnPro Admin</title>
+<link rel="stylesheet" href="../style.css">
+<style>body{padding-bottom:20px}</style>
+</head>
+<body>
+<div class="auth-wrap fade-in">
+  <div class="auth-top">
+    <div class="alogo">🛡️</div>
+    <h1>Admin Panel</h1>
+    <p>EarnPro Management</p>
+  </div>
+  <div class="auth-card">
+    <h2>Admin Login 🛡️</h2>
+    <p class="sub">Authorized personnel only</p>
+    <div class="igroup">
+      <label>Email</label>
+      <input type="email" id="em" class="ifield" placeholder="admin@earnpro.com">
+    </div>
+    <div class="igroup">
+      <label>Password</label>
+      <input type="password" id="pw" class="ifield" placeholder="••••••••">
+    </div>
+    <button class="btn btn-primary btn-full" id="loginBtn" style="padding:14px">🛡️ Login as Admin</button>
+  </div>
+</div>
+<script type="module">
+import { auth, db } from '../firebase.js';
+import { signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { toast, showLoader, hideLoader } from '../app.js';
+
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.data()?.role === 'admin') location.href = 'index.html';
+  }
+});
+
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const em = document.getElementById('em').value.trim();
+  const pw = document.getElementById('pw').value;
+  if (!em || !pw) { toast('Fill all fields', 'err'); return; }
+  showLoader('Verifying...');
+  try {
+    const cred = await signInWithEmailAndPassword(auth, em, pw);
+    const snap = await getDoc(doc(db, 'users', cred.user.uid));
+    if (snap.data()?.role !== 'admin') {
+      hideLoader();
+      toast('Access denied. Not an admin.', 'err');
+      return;
+    }
+    location.href = 'index.html';
+  } catch(e) {
+    hideLoader();
+    toast('Invalid credentials', 'err');
+  }
+});
+</script>
+</body>
+</html>
