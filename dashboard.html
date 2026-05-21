@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard — Admin</title>
+  <link rel="stylesheet" href="css/admin.css"/>
+</head>
+<body>
+<div id="page-loader"><div class="ring"></div></div>
+
+<div class="main" id="main-content" style="display:none;">
+  <header class="top-bar">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="menu-toggle">☰</button>
+      <span class="page-title">📊 Dashboard</span>
+    </div>
+    <div class="top-bar-right">
+      <span style="font-size:12px;color:var(--text2);" id="last-updated"></span>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- Stats Row -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-box">
+        <div class="sb-header"><span style="font-size:14px;color:var(--text2);">Total Users</span><div class="sb-icon" style="background:rgba(124,58,237,0.15);">👥</div></div>
+        <div class="sb-value text-purple" id="s-users">—</div>
+        <div class="sb-label">Registered accounts</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-header"><span style="font-size:14px;color:var(--text2);">Total Paid Out</span><div class="sb-icon" style="background:rgba(16,185,129,0.15);">💸</div></div>
+        <div class="sb-value text-green" id="s-paid">—</div>
+        <div class="sb-label">Approved withdrawals</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-header"><span style="font-size:14px;color:var(--text2);">Pending Withdrawals</span><div class="sb-icon" style="background:rgba(245,158,11,0.15);">⏳</div></div>
+        <div class="sb-value text-gold" id="s-pending">—</div>
+        <div class="sb-label">Awaiting approval</div>
+      </div>
+      <div class="stat-box">
+        <div class="sb-header"><span style="font-size:14px;color:var(--text2);">Active Tasks</span><div class="sb-icon" style="background:rgba(59,130,246,0.15);">🎯</div></div>
+        <div class="sb-value text-purple" id="s-tasks">—</div>
+        <div class="sb-label">Published tasks</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+      <!-- Recent Withdrawals -->
+      <div class="card">
+        <div class="card-header">
+          <h2>💸 Recent Withdrawals</h2>
+          <a href="withdraw.html" class="btn btn-secondary btn-xs">View All</a>
+        </div>
+        <div id="recent-wd">
+          <div style="text-align:center;padding:20px;color:var(--text3);">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Recent Registrations -->
+      <div class="card">
+        <div class="card-header">
+          <h2>👥 New Users</h2>
+          <a href="users.html" class="btn btn-secondary btn-xs">View All</a>
+        </div>
+        <div id="recent-users">
+          <div style="text-align:center;padding:20px;color:var(--text3);">Loading…</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Platform Stats Summary -->
+    <div class="card">
+      <div class="card-header"><h2>📈 Platform Overview</h2></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:1.4rem;font-weight:900;color:var(--gold);" id="o-earned">$0</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Total Earned (All Users)</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:1.4rem;font-weight:900;color:var(--neon);" id="o-ads">0</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Total Ads Watched</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:1.4rem;font-weight:900;color:var(--blue);" id="o-tasks">0</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Total Tasks Completed</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:1.4rem;font-weight:900;color:var(--pink);" id="o-refs">0</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Total Referrals</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase/firebase.js"></script>
+<script src="js/sidebar.js"></script>
+<script>
+requireAdmin(async (user)=>{
+  renderAdminSidebar('dashboard');
+  document.getElementById('page-loader').classList.add('hide');
+  document.getElementById('main-content').style.display='flex';
+  document.getElementById('main-content').style.flexDirection='column';
+
+  document.getElementById('last-updated').textContent='Updated: '+new Date().toLocaleTimeString();
+
+  loadStats();
+  loadRecentWithdrawals();
+  loadRecentUsers();
+  loadOverview();
+});
+
+async function loadStats(){
+  const [usersSnap, pendingSnap, tasksSnap] = await Promise.all([
+    db.collection('users').where('role','==','user').get(),
+    db.collection('withdrawals').where('status','==','pending').get(),
+    db.collection('tasks').where('isActive','==',true).get()
+  ]);
+  document.getElementById('s-users').textContent   = usersSnap.size;
+  document.getElementById('s-pending').textContent = pendingSnap.size;
+  document.getElementById('s-tasks').textContent   = tasksSnap.size;
+
+  // Approved paid
+  const approvedSnap=await db.collection('withdrawals').where('status','==','approved').get();
+  let totalPaid=0;
+  approvedSnap.forEach(d=>{ totalPaid+=d.data().amount||0; });
+  document.getElementById('s-paid').textContent='$'+totalPaid.toFixed(2);
+}
+
+async function loadRecentWithdrawals(){
+  const snap=await db.collection('withdrawals').orderBy('createdAt','desc').limit(6).get();
+  const el=document.getElementById('recent-wd');
+  if(snap.empty){ el.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No withdrawals yet</div>'; return; }
+  const colors={pending:'badge-pending',approved:'badge-success',rejected:'badge-danger'};
+  el.innerHTML='<div class="table-wrap"><table><thead><tr><th>User</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>'+
+    snap.docs.map(d=>{const w=d.data();return`<tr><td>${w.displayName||'—'}</td><td class="text-gold font-bold">$${formatCurrency(w.amount)}</td><td>${w.method||'—'}</td><td><span class="badge ${colors[w.status]||'badge-pending'}">${w.status||'pending'}</span></td></tr>`;}).join('')+
+  '</tbody></table></div>';
+}
+
+async function loadRecentUsers(){
+  const snap=await db.collection('users').orderBy('createdAt','desc').limit(6).get();
+  const el=document.getElementById('recent-users');
+  if(snap.empty){ el.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);">No users yet</div>'; return; }
+  el.innerHTML='<div class="table-wrap"><table><thead><tr><th>Name</th><th>Balance</th><th>Joined</th></tr></thead><tbody>'+
+    snap.docs.map(d=>{const u=d.data();return`<tr><td>${u.displayName||'—'}</td><td class="text-green font-bold">$${formatCurrency(u.balance)}</td><td class="text-muted">${timeAgo(u.createdAt)}</td></tr>`;}).join('')+
+  '</tbody></table></div>';
+}
+
+async function loadOverview(){
+  const snap=await db.collection('users').where('role','==','user').get();
+  let earned=0, ads=0, tasks=0, refs=0;
+  snap.forEach(d=>{
+    const u=d.data();
+    earned+=u.totalEarned||0; ads+=u.adsWatched||0;
+    tasks+=u.tasksCompleted||0; refs+=u.referralCount||0;
+  });
+  document.getElementById('o-earned').textContent='$'+earned.toFixed(2);
+  document.getElementById('o-ads').textContent=ads.toLocaleString();
+  document.getElementById('o-tasks').textContent=tasks.toLocaleString();
+  document.getElementById('o-refs').textContent=refs.toLocaleString();
+}
+</script>
+</body>
+</html>
