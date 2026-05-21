@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notices — Admin</title>
+  <link rel="stylesheet" href="css/admin.css"/>
+</head>
+<body>
+<div id="page-loader"><div class="ring"></div></div>
+
+<div class="main" id="main-content" style="display:none;">
+  <header class="top-bar">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button class="menu-toggle">☰</button>
+      <span class="page-title">📢 Notice Board</span>
+    </div>
+    <div class="top-bar-right">
+      <button class="btn btn-primary btn-sm" onclick="openCreate()">+ Post Notice</button>
+    </div>
+  </header>
+
+  <div class="content">
+    <div class="card">
+      <div id="notices-list">
+        <div style="text-align:center;padding:20px;color:var(--text3);">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div class="modal-bg" id="notice-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="notice-modal-title">Post Notice</div>
+    <input type="hidden" id="notice-id"/>
+    <div class="form-group">
+      <label>Title</label>
+      <input type="text" id="n-title" class="input" placeholder="Notice title…"/>
+    </div>
+    <div class="form-group">
+      <label>Body / Message</label>
+      <textarea id="n-body" class="input" rows="4" placeholder="Full notice message…"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <select id="n-type" class="input">
+        <option value="info">ℹ️ Info</option>
+        <option value="urgent">🚨 Urgent</option>
+        <option value="update">🆕 Update</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="save-notice-btn" onclick="saveNotice()">Publish Notice</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm -->
+<div class="modal-bg" id="del-modal">
+  <div class="modal-box">
+    <div class="modal-title">🗑️ Delete Notice</div>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:20px;">Delete this notice? It will be removed from the user panel immediately.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="document.getElementById('del-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-danger" id="del-confirm-btn" onclick="deleteNotice()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="firebase/firebase.js"></script>
+<script src="js/sidebar.js"></script>
+<script>
+let deleteId=null;
+
+requireAdmin(()=>{
+  renderAdminSidebar('notices');
+  document.getElementById('page-loader').classList.add('hide');
+  document.getElementById('main-content').style.display='flex';
+  document.getElementById('main-content').style.flexDirection='column';
+  loadNotices();
+});
+
+async function loadNotices(){
+  const el=document.getElementById('notices-list');
+  const snap=await db.collection('notices').orderBy('createdAt','desc').get();
+  if(snap.empty){ el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);">No notices yet. Post the first one!</div>'; return; }
+
+  const typeColors={info:'var(--blue)',urgent:'var(--red)',update:'var(--green)'};
+  const typeLabels={info:'ℹ️ Info',urgent:'🚨 Urgent',update:'🆕 Update'};
+
+  el.innerHTML=snap.docs.map(d=>{
+    const n={id:d.id,...d.data()};
+    return `
+      <div style="background:var(--bg4);border-radius:12px;padding:16px;margin-bottom:12px;border-left:4px solid ${typeColors[n.type]||typeColors.info};">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-size:13px;font-weight:800;">${n.title||'Untitled'}</span>
+              <span class="badge badge-info" style="font-size:10px;">${typeLabels[n.type]||'Info'}</span>
+            </div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:8px;">${n.body||''}</div>
+            <div style="font-size:11px;color:var(--text3);">Posted ${timeAgo(n.createdAt)}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button class="btn btn-secondary btn-xs" onclick='openEdit(${JSON.stringify(n)})'>Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="openDelete('${n.id}')">Delete</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openCreate(){
+  document.getElementById('notice-id').value='';
+  document.getElementById('notice-modal-title').textContent='Post Notice';
+  document.getElementById('n-title').value='';
+  document.getElementById('n-body').value='';
+  document.getElementById('n-type').value='info';
+  document.getElementById('notice-modal').classList.add('open');
+}
+
+function openEdit(n){
+  document.getElementById('notice-id').value=n.id;
+  document.getElementById('notice-modal-title').textContent='Edit Notice';
+  document.getElementById('n-title').value=n.title||'';
+  document.getElementById('n-body').value=n.body||'';
+  document.getElementById('n-type').value=n.type||'info';
+  document.getElementById('notice-modal').classList.add('open');
+}
+
+async function saveNotice(){
+  const btn=document.getElementById('save-notice-btn');
+  const id=document.getElementById('notice-id').value;
+  const data={
+    title:document.getElementById('n-title').value.trim(),
+    body:document.getElementById('n-body').value.trim(),
+    type:document.getElementById('n-type').value
+  };
+  if(!data.title){ showToast('Title required','warning'); return; }
+  if(!data.body)  { showToast('Body required','warning'); return; }
+  btn.textContent='Publishing…'; btn.disabled=true;
+  try {
+    if(id){
+      await db.collection('notices').doc(id).update(data);
+      showToast('Notice updated!','success');
+    } else {
+      await db.collection('notices').add({...data, createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      showToast('Notice published!','success');
+    }
+    closeModal(); loadNotices();
+  } catch(e){ showToast('Error: '+e.message,'error'); }
+  btn.textContent='Publish Notice'; btn.disabled=false;
+}
+
+function openDelete(id){ deleteId=id; document.getElementById('del-modal').classList.add('open'); }
+async function deleteNotice(){
+  if(!deleteId) return;
+  const btn=document.getElementById('del-confirm-btn');
+  btn.textContent='Deleting…'; btn.disabled=true;
+  try {
+    await db.collection('notices').doc(deleteId).delete();
+    document.getElementById('del-modal').classList.remove('open');
+    showToast('Notice deleted','success');
+    loadNotices();
+  } catch(e){ showToast('Error: '+e.message,'error'); btn.disabled=false; btn.textContent='Delete'; }
+}
+
+function closeModal(){ document.getElementById('notice-modal').classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); }));
+</script>
+</body>
+</html>
